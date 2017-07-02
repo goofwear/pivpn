@@ -31,7 +31,7 @@ easyrsaVer="3.0.1-pivpn1"
 easyrsaRel="https://github.com/pivpn/easy-rsa/releases/download/${easyrsaVer}/EasyRSA-${easyrsaVer}.tgz"
 
 # Find the rows and columns. Will default to 80x24 if it can not be detected.
-screen_size=$(stty size 2>/dev/null || echo 24 80) 
+screen_size=$(stty size 2>/dev/null || echo 24 80)
 rows=$(echo $screen_size | awk '{print $1}')
 columns=$(echo $screen_size | awk '{print $2}')
 
@@ -45,10 +45,10 @@ c=$(( c < 70 ? 70 : c ))
 # Find IP used to route to outside world
 
 IPv4dev=$(ip route get 8.8.8.8 | awk '{for(i=1;i<=NF;i++)if($i~/dev/)print $(i+1)}')
-IPv4addr=$(ip -o -f inet addr show dev "$IPv4dev" | awk '{print $4}' | awk 'END {print}')
+IPv4addr=$(ip route get 8.8.8.8| awk '{print $7}')
 IPv4gw=$(ip route get 8.8.8.8 | awk '{print $3}')
 
-availableInterfaces=$(ip -o link | awk '{print $2}' | grep -v "lo" | cut -d':' -f1 | cut -d'@' -f1)
+availableInterfaces=$(ip -o link | grep "state UP" | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)
 dhcpcdFile=/etc/dhcpcd.conf
 
 ######## FIRST CHECK ########
@@ -213,7 +213,7 @@ verifyFreeDiskSpace() {
             *)
                 echo "::: Confirmation not received, exiting..."
                 exit 1
-                ;; 
+                ;;
         esac
     # - Insufficient free disk space
     elif [[ ${existing_free_kilobytes} -lt ${required_free_kilobytes} ]]; then
@@ -241,6 +241,12 @@ chooseInterface() {
     local chooseInterfaceOptions
     # Loop sentinel variable
     local firstLoop=1
+
+    if [[ $(echo "${availableInterfaces}" | wc -l) -eq 1 ]]; then
+      pivpnInterface="${availableInterfaces}"
+      echo "${pivpnInterface}" > /tmp/pivpnINT
+      return
+    fi
 
     while read -r line; do
         mode="OFF"
@@ -402,6 +408,8 @@ installScripts() {
     $SUDO chmod 0755 /usr/local/bin/pivpn
     $SUDO cp /etc/.pivpn/scripts/bash-completion /etc/bash_completion.d/pivpn
     . /etc/bash_completion.d/pivpn
+    # Copy interface setting for debug
+    $SUDO cp /tmp/pivpnINT /etc/pivpn/pivpnINTERFACE
 
     $SUDO echo " done."
 }
@@ -423,7 +431,7 @@ update_package_cache() {
   if [[ ${PLAT} == "Ubuntu" || ${PLAT} == "Debian" ]]; then
     if [[ ${OSCN} == "trusty" || ${OSCN} == "jessie" || ${OSCN} == "wheezy" ]]; then
       wget -O - https://swupdate.openvpn.net/repos/repo-public.gpg| $SUDO apt-key add -
-      echo "deb http://swupdate.openvpn.net/apt $OSCN main" | $SUDO tee /etc/apt/sources.list.d/swupdate.openvpn.net.list > /dev/null
+      echo "deb http://build.openvpn.net/debian/openvpn/stable $OSCN main" | $SUDO tee /etc/apt/sources.list.d/swupdate.openvpn.net.list > /dev/null
       echo -n "::: Adding OpenVPN repo for $PLAT $OSCN ..."
       $SUDO apt-get -qq update & spinner $!
       echo " done!"
@@ -460,7 +468,7 @@ install_dependent_packages() {
   # Install packages passed in via argument array
   # No spinner - conflicts with set -e
   declare -a argArray1=("${!1}")
- 
+
   echo iptables-persistent iptables-persistent/autosave_v4 boolean true | $SUDO debconf-set-selections
   echo iptables-persistent iptables-persistent/autosave_v6 boolean false | $SUDO debconf-set-selections
 
@@ -513,7 +521,7 @@ checkForDependencies() {
     if [[ $PLAT == "Ubuntu" || $PLAT == "Debian" ]]; then
         if [[ $OSCN == "trusty" || $OSCN == "jessie" || $OSCN == "wheezy" ]]; then
             wget -O - https://swupdate.openvpn.net/repos/repo-public.gpg| $SUDO apt-key add -
-            echo "deb http://swupdate.openvpn.net/apt $OSCN main" | $SUDO tee /etc/apt/sources.list.d/swupdate.openvpn.net.list > /dev/null
+            echo "deb http://build.openvpn.net/debian/openvpn/stable $OSCN main" | $SUDO tee /etc/apt/sources.list.d/swupdate.openvpn.net.list > /dev/null
             echo -n "::: Adding OpenVPN repo for $PLAT $OSCN ..."
             $SUDO apt-get -qq update & spinner $!
             echo " done!"
@@ -704,7 +712,7 @@ setClientDNS() {
             ;;
         DNS.WATCH)
             echo "::: Using DNS.WATCH servers."
-            OVPNDNS1="82.200.69.80"
+            OVPNDNS1="84.200.69.80"
             OVPNDNS2="84.200.70.40"
             $SUDO sed -i '0,/\(dhcp-option DNS \)/ s/\(dhcp-option DNS \).*/\1'${OVPNDNS1}'\"/' /etc/openvpn/server.conf
             $SUDO sed -i '0,/\(dhcp-option DNS \)/! s/\(dhcp-option DNS \).*/\1'${OVPNDNS2}'\"/' /etc/openvpn/server.conf
